@@ -139,15 +139,29 @@ def search(q: str) -> list[dict]:
 @lru_cache(maxsize=None)
 def _get_database():
     global database_name
+
     databases = depaginate("https://api.scryfall.com/bulk-data")
     bulk_data = [database for database in databases if database["type"] == database_name]
     if len(bulk_data) != 1:
         raise ValueError(f"Unknown database {database_name}")
 
-    bulk_file = get_file(bulk_data[0]["download_uri"].split("/")[-1], bulk_data[0]["download_uri"])
-    with open(bulk_file, encoding="utf-8") as json_file:
-        return json.load(json_file)
+    file_name = bulk_data[0]["download_uri"].split("/")[-1]
+    database_file = cache / f"db_{file_name}"
 
+    # use database_file if available
+    if database_file.is_file():
+        with open(database_file, encoding="utf-8") as json_file:
+            return json.load(json_file)
+
+    bulk_file = get_file(file_name, bulk_data[0]["download_uri"])
+    required_keys = ["name", "set", "collector_number", "image_uris", "prices", "oracle_id", "layout", "card_faces", "digital", "border_color", "frame", "nonfoil", "highres_image", "lang"]
+    with (open(bulk_file, encoding="utf-8") as json_file):
+        # filter required properties
+        cards = [{ key: (val if key != 'image_uris' else { "png": val["png"] }) for key, val in card.items() if key in required_keys} for card in json.load(json_file)]
+        # write to database_file
+        with open(database_file, "w", encoding="utf-8") as dist_file:
+            dist_file.write(json.dumps(cards, indent=2))
+        return cards
 
 def canonic_card_name(card_name: str) -> str:
     """Get canonic card name representation."""
@@ -190,13 +204,17 @@ def get_cards(**kwargs):
     Returns:
         List of all matching cards
     """
-    cards = _get_database()
+    # if name is specified, find all cards from oracle ids
+    if "name" in kwargs and kwargs["name"] is not None:
+        name = canonic_card_name(kwargs.pop("name").lower())
+        oracle_ids = oracle_ids_by_name().get(name, [])
+        cards = [card for oracle_id in oracle_ids for card in cards_by_oracle_id()[oracle_id]]
+    else:
+        cards = _get_database()
 
     for key, value in kwargs.items():
         if value is not None:
             value = value.lower()
-            if key == "name":  # Normalize card name
-                value = canonic_card_name(value)
             cards = [card for card in cards if key in card and card[key].lower() == value]
 
     return cards
