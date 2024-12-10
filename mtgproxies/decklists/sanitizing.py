@@ -67,7 +67,7 @@ def get_print_warnings(card) -> list[str]:
         warnings.append("non-english print")
     if scryfall.get_language() is not None and card["lang"] != scryfall.get_language():
         warnings.append("non-" + scryfall.get_language() + " print")
-    if card["border_color"] != "black":
+    if card["border_color"] != "black" and card["border_color"] != "borderless":
         warnings.append(card["border_color"] + " border")
     return warnings
 

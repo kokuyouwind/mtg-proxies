@@ -10,7 +10,6 @@ from typing import Any
 import scryfall
 from mtgproxies.decklists.sanitizing import validate_card_name, validate_print
 
-
 @dataclass
 class Card:
     """Card in a decklist.
